@@ -20,10 +20,20 @@ function verifyIfCustomerExists(request, response, next) {
     return next();
 }
 
+function getBalance(statement) {
+    const balance = statement.reduce((acc, operation) => {
+        if (operation.type === 'credit') {
+            return acc + operation.amount;
+        } else {
+            return acc - operation.amount;
+        }
+    }, 0)
+
+    return balance;
+}
+
 app.post('/account', (request, response) => {
     const { cpf, name } = request.body;
-    const id = uuidv4();
-
     const customerAlreadyExists = customers.some((customer) => customer.cpf === cpf);
     if (customerAlreadyExists) {
         return response.status(400).json({ error: "Custumer already exists!" })
@@ -52,12 +62,30 @@ app.post("/deposit", verifyIfCustomerExists, (request, response) => {
         description,
         amount,
         date: new Date(),
-        operation: "credit",
+        type: "credit",
     };
 
     customer.statement.push(statementOperation);
 
     return response.status(201).send()
+})
+
+app.post("/withdraw", verifyIfCustomerExists, (request, response) => {
+    const { amount } = request.body;
+    const { customer } = request;
+    const balance = getBalance(customer.statement);
+
+    if (balance < amount) {
+        return response.status(400).json({ error: "Insufficient funds!" });
+    }
+    const statementOperation = {
+        amount,
+        date: new Date(),
+        type: "debit",
+    };
+
+    customer.statement.push(statementOperation);
+    return response.status(201).send();
 })
 
 app.listen(3333);
